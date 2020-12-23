@@ -1,0 +1,277 @@
+---
+title: "Does a higher paying job and longer working hours come at the cost of mental health?"
+author: "Smriti Kannan"
+date: "22nd December 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+Additional code supporting this analysis can be found at: 
+
+https://github.com/smritikannan/A-study-on-mental-health.git 
+
+
+# Abstract
+
+
+There are various factors affecting an individual's mental health. In this paper, a logistic regression model is built to analyze the effects of an individual's income and hours worked per week on an individual's mental health. The data used to build the model is the 2017 Canadian General Social Survey. The analysis finds that individuals with lower incomes and those who work for longer hours per week have a higher chance of having lower mental health. 
+
+
+# Introduction
+
+
+Numerous factors affect an individual’s mental health, broadly categorized into biological factors, personal factors, physical and social environment and economic environment (Maintaining Good Mental Health). An individual’s economic environment includes employment status and job conditions which can largely affect mental wellbeing (Maintaining Good Mental Health).  Mental health in the workplace seems to be quite important to many Canadians. 77% of Canadians would leave their current job for the same pay if their new employer has better mental health support (Zeba Khan). In addition, 60% of employees would take a job with lower pay if it meant better mental health. (Zeba Khan). 
+
+
+Higher-income jobs tend to be more stressful, more fast-paced and sometimes also have longer hours. In some occupations, it might be more obvious such as being a surgeon, where the hours are long in high-stress environments. Do individuals with higher-paying jobs have lower mental wellbeing? In addition, does working longer hours lead to a decline in mental health? Both of these questions will be investigated in this paper. 
+
+
+# Data
+
+The data used in the analysis is the general social survey on families (2017) from the CHASS website. The target population is all Canadians aged 15 and over in the ten provinces of Canada (Government of Canada, Statistics Canada). The sampling frame for the survey is the Statistics Canada's common telephone frame, which combines landline and cellular telephone numbers from the Address Register (Government of Canada, Statistics Canada).
+
+Some advantages of the data set are that it is the most recent general social survey and it is a large data set (20,602 data points) with numerous variables (81) and can be used for various types of analyses. A potential drawback with this data set is that there are fewer quantitative variables which can make it harder to build certain models - for example, linear regression. Another drawback is that since it is survey data, non-probability sampling was used which can introduce some biases in the data.
+
+After obtaining the data set from the CHASS website, the data set was cleaned and variable names were changed to make it easier to understand. Some variables were also changed to make the data more meaningful. For example, the original data set for gender had values of 1 or 2 indicating male or female. After modifying the data set, now gender takes the value of either male or female. Then the columns of interest were selected and data points with NA were removed. An additional column was created which indicates whether the individual has lower mental health or not. This new column will be very useful when we build a model. 
+
+
+
+```{r, echo=FALSE}
+my_data = read.csv("gss.csv")
+# Choosing variables of interest
+my_data <- my_data%>%
+  select(caseid, feelings_life, average_hours_worked, self_rated_mental_health, income_respondent, occupation)
+# Removing data values with N/A
+my_data <- na.omit(my_data)
+# Filtering out data with values of Don't know
+my_data <- my_data%>%
+  filter(average_hours_worked != "Don't know")
+my_data <- my_data%>%
+  filter(average_hours_worked != "0 hour")
+my_data <- my_data%>%
+  filter(self_rated_mental_health != "Don't know")
+#Adding a new variable which will be useful when building the model
+my_data <- my_data%>%
+  mutate(lower_mental_health = case_when(self_rated_mental_health == 'Poor' ~ 1, self_rated_mental_health == 'Fair' ~ 1, self_rated_mental_health == 'Good' ~ 0, self_rated_mental_health == 'Very good' ~ 0, self_rated_mental_health == 'Excellent' ~ 0))
+```
+
+
+
+
+Plotting the self rated mental health for the data set:
+
+
+```{r, eval=TRUE, echo=FALSE}
+#Plotting the raw data
+my_data %>%
+  ggplot(aes(x = self_rated_mental_health)) +
+  theme_classic()+
+  geom_bar(colour = "black", fill = "thistle")+
+  labs(title = "Figure 1: Mental health of all individuals in Canada", 
+       subtitle = stringr::str_c("Data from GSS 2017"),
+       x = 'Self rated mental health',
+       y = 'Number of people')
+```
+
+From Figure 1 above, we can see that a large part of the data has individuals with mental health being 'Good', 'Very good' and 'Excellent'. The largest proportion of the population has 'Very good' self-rated mental health and the smallest proportion of the population has 'Poor' self-rated mental health. It will be interesting to see if the patterns remain the same once we focus on certain values of variables in the data set. 
+
+
+
+# Model
+
+The model being used to analyze the data is a logistic regression model. Logistic regression is a type of statistical model that uses a logistic function to model a binary response variable. The model being constructed will use the glm() function in R.
+
+
+A key assumption that is made when constructing a logistic regression model is that we have a binary response variable. The response variable in our model is mental health. Since within our data set, self-rated mental health is not binary, we created a new variable. The new variable, groups individuals with poor and fair mental health into having an overall lower mental health. Individuals with good, very good and excellent mental health are grouped into not having lower mental health. This new variable now allows us to construct a logistic regression model. 
+ 
+
+The equation of our logistic regression model is:
+$$
+log(\frac{\hat{p}}{1-\hat{p}})= \beta_0 + \beta_1 X_{inc<25} + \beta_2 X_{inc\_25-49} + \beta_3 X_{inc\_50-74} + \beta_4 X_{inc\_75-99}
+$$
+$$
++ \beta_5 X_{inc>125} + \beta_6 X_{work\_30-40h} + \beta_7 X_{work\_40.1-50h} + \beta_8 X_{work>50h}
+$$
+where:
+
+* inc<25 = income of less than $25,000
+* inc_25-49 = income between \$25,000 to \$49,999
+* inc_50-74 = income between \$50,000 to \$74,999
+* inc_75-99 = income between \$75,000 to \$99,999
+* inc>125 = income greater than \$125,000
+* work_30-40h = average hours worked is between 30 to 40 hours 
+* work_40.1-50h = average hours worked is between 40.1 to 50 hours 
+* work>50.1 = average hours worked is greater than 50 hours 
+
+and $$\hat{p}$$ is the probability of having lower mental health.
+
+```{r, eval=TRUE, echo=FALSE}
+#Using a simple logistic regression model
+logisticmodel <- glm(lower_mental_health ~ as.factor(income_respondent) + as.factor(average_hours_worked), data = my_data, family = "binomial")
+#summary(logisticmodel)
+```
+
+
+
+# Results
+
+
+```{r, eval=TRUE, echo=FALSE}
+#Plotting the raw data
+lowest_income_data <- my_data%>%
+  filter(income_respondent == 'Less than $25,000')
+lowest_income_data %>%
+  ggplot(aes(x = self_rated_mental_health)) +
+  theme_classic()+
+  geom_bar(colour = "black", fill = "lightcyan1")+
+  labs(title = "Figure 2: Mental health of income earners (less than $25,000) in Canada", 
+       subtitle = stringr::str_c("Data from GSS 2017"),
+       x = 'Self rated mental health',
+       y = 'Number of people')
+```
+
+
+```{r, eval=TRUE, echo=FALSE}
+highest_income_data <- my_data%>%
+  filter(income_respondent == '$125,000 and more')
+highest_income_data %>%
+  ggplot(aes(x = self_rated_mental_health)) +
+  theme_classic()+
+  geom_bar(colour = "black", fill = "lightblue2")+
+  labs(title = "Figure 3: Mental health of income earners ($125,000 and more) in Canada", 
+       subtitle = stringr::str_c("Data from GSS 2017"),
+       x = 'Self rated mental health',
+       y = 'Number of people')
+```
+
+
+
+From Figure 2 and Figure 3 it seems to be quite clear that there is a smaller proportion of people with 'Fair' and 'Poor' mental for income earners of \$125,000 or more when compared to income earners of less than \$25,000.
+
+```{r, eval=TRUE, echo=FALSE}
+least_hours_worked_data <- my_data%>%
+  filter(average_hours_worked == '0.1 to 29.9 hours')
+least_hours_worked_data %>%
+  ggplot(aes(x = self_rated_mental_health)) +
+  theme_classic()+
+  geom_bar(colour = "black", fill = "skyblue1")+
+  labs(title = "Figure 4: Mental health of people working less than 30 hours a week in Canada", 
+       subtitle = stringr::str_c("Data from GSS 2017"),
+       x = 'Self rated mental health',
+       y = 'Number of people')
+```
+
+
+```{r, eval=TRUE, echo=FALSE}
+most_hours_worked_data <- my_data%>%
+  filter(average_hours_worked == '50.1 hours and more')
+most_hours_worked_data %>%
+  ggplot(aes(x = self_rated_mental_health)) +
+  theme_classic()+
+  geom_bar(colour = "black", fill = "royalblue1")+
+  labs(title = "Figure 5: Mental health of people working more than 50 hours a week in Canada", 
+       subtitle = stringr::str_c("Data from GSS 2017"),
+       x = 'Self rated mental health',
+       y = 'Number of people')
+```
+
+
+
+From Figure 4 and Figure 5, the proportion of individuals with 'Poor' mental health seems to be the same for both groups with different hours worked each week. There seems to be a smaller proportion of people with 'Fair' mental health for those working more than 50 hours a week when compared to those who work less than 30 hours a week.
+
+
+### Table 1: Coefficients from the logistic regression model
+
+Variable names                        | Estimate    | Std. Error.   | z value      | Pr>\|z\|
+------------------------------------- |------------ |-------------- |------------- |-------------
+(Intercept)                           |-3.06562     |0.20136        |-15.224       |< 2e-16
+Less than $25,000                     |0.87035      |0.19419        |4.482         |7.4e-06
+\$25,000 to $49,999                   |0.44586      |0.19209        |2.321         |0.0203
+\$50,000 to $74,999                   |0.18374      |0.19931        |0.922         |0.3566
+\$75,000 to $99,999                   |0.08793      |0.21306        |0.413         |0.6798
+\$125,000 and more                    |-0.51112     |0.29031        |-1.761        |0.0783
+30.0 to 40.0 hours                    |0.01836      |0.09638        |0.191         |0.8489 
+40.1 to 50.0 hours                    |-0.20415     |0.14486        |-1.409        |0.1588 
+50.1 hours and more                   |0.07700      |0.15583        |0.494         |0.6212 
+
+
+### Table 2: Probability calculations using the model and model equation
+
+Value of variables selected                                    |Probability of having lower mental health
+---------------------------------------------------------------|-------------------------------------------
+Less than $25,000 and 30.0 to 40.0 hours                       |0.1018
+\$125,000 and more and 30.0 to 40.0 hours                      |0.0277
+\$50,000 to $74,999 and less than 30 hours                     |0.0531
+\$50,000 to $74,999 and 50.1 hours and more                    |0.0571
+
+
+From Table 2, we can see that a difference in income seems to have a larger effect in probability of having a lower mental health than a difference in hours worked a week.
+
+# Discussion
+
+To investigate the effects on mental health with respect to the income of an individual, we made two calculations from the logistic regression model with hours worked as 30 to 40 hours. This is because on average, in 2017, Canadians worked 37.7 hours a week (Government of Canada, Statistics Canada). From Table 2 we can see that the probability of an individual having lower mental health with an income of less than \$25,000 and working 30 to 40 hours is 0.1018. The probability of an individual having lower mental health with an income of \$125,000 or more and working 30 to 40 hours is 0.0227. The difference in probability is 0.0741 which is not too large but is not large or small enough to make a definite conclusion. If we look at Figure 2 and Figure 3, they also seem to support this finding. It is quite clear from looking at the two graphs that there is a much larger proportion of people whose mental health is 'Fair' and 'Poor' in the lower-income graph than the higher income graph. 
+
+
+This is the opposite of what we believed would happen. We believed that individuals with a larger income were more susceptible to having lower mental health. Instead, the opposite is true from our logistic regression model. Some reasons for this could be because, with a lower income, it can be harder to provide food and shelter for the individual and the individual's family. Lower incomes can also make it harder to live during troubled economic times. A study in the UK also showed similar results where low-paid workers were significantly more likely to have certain anxiety disorders (Christina et al).
+
+
+Similarly, to investigate the effects of average hours worked on mental health, we made two calculations from the logistic regression model with income between \$50,000 to \$74,999. This is because the average income of an individual in Canada is \$59,800 (Statistics Canada). From Table 2 we observe that the probability of an individual having lower mental health with an income between \$50,000 to \$74,999 and working less than 30 hours a week is 0.0531. The probability of an individual having low mental health with an income between \$50,000 to \$74,999 and working more than 50 hours a week is 0.0571. Figure 4 and Figure 5 seem to point towards the same finding. From both the graphs, we can see that the proportion of individuals who have 'Very good' mental health is higher in the graph with individuals working fewer hours than those working longer hours.
+
+Therefore, individuals who work long hours seem to be more susceptible to having lower mental health. But the difference in probabilities from our model is only 0.04 and therefore we cannot be fully sure of the conclusion.
+
+
+
+# Weaknesses 
+
+
+One potential weakness with our analysis is that our data set was obtained using non-probability sampling which can lead to some biases or can give us a non-representative sample. The general social survey data is collected using a combination of self-completed online questionnaires and telephone interviews since 2013 (Government of Canada, Statistics Canada). This might lead to some inaccuracy in the data collected as people fill these out themselves and they might not be completely honest. However, Statistics Canada began asking respondents for permission to link their survey information to additional data sources such as personal tax records (Government of Canada, Statistics Canada)  which allows for data such as income to be much more accurate.
+
+
+Another weakness is that we used self-rated mental health when constructing our models. We couldn't use actual mental health because there is no way for the government to get everyone's mental health assessed as it is not feasible. Self-rated mental health can be quite subjective and some people might not be able to accurately assess their mental wellbeing. A way to improve our analysis could be to incorporate variables that also indicate the mental wellbeing of an individual. This would make our analysis and findings more accurate.
+
+
+
+# Next Steps
+
+
+To investigate if our data is biased, a similar analysis should be conducted on a data set that we know is representative. This will help us confirm if our findings are accurate and if the data we used is not biased. Another useful next step would be to perform a similar analysis using maybe a previous GSS data set and compare findings to see if they are similar or different. This will further our understanding between the relationship of income and hours worked a week and self-rated mental health. 
+
+A related interesting topic could be to compare this mental health data with more recent 2020 data. Given the COVID-19 pandemic this year, it would interesting to see if there is an overall decline in mental health given the circumstances.
+ 
+
+
+# References
+
+
+Maintaining Good Mental Health. www.quebec.ca/en/health/advice-and-prevention/mental-health/maintaining-good-mental-health/.  Accessed 9 Dec 2020.
+
+
+Zeba Khan. “Canadians Say They’d Take a Lower Paying Job If It Meant Better Mental Health Support: Survey.” Financialpost, Financial Post, 28 Jan. 2020, financialpost.com/executive/careers/canadians-say-theyd-take-a-lower-paying-job-if-it-meant-better-mental-health-support-survey.  Accessed 9 Dec. 2020.
+
+
+Alexander, Rohan and Caetano, Sam. "gss_cleaning.R". Accessed 12 Dec. 2020
+
+
+“CHASS Data Centre.” Utoronto.Ca, 2015, datacentre.chass.utoronto.ca/. Accessed 12 Dec. 2020.
+
+
+“General Social Survey (GSS): An Overview.” Statcan.Gc.Ca, Government of Canada, Statistics Canada, 20 Feb. 2019, www150.statcan.gc.ca/n1/pub/89f0115x/89f0115x2019001-eng.htm. Accessed 12 Dec. 2020.
+
+
+“Ggplot2 Quick Reference: Colour (and Fill) | Software and Programmer Efficiency Research Group.” Inf.Usi.Ch, 2020, sape.inf.usi.ch/quick-reference/ggplot2/colour. Accessed 14 Dec. 2020.
+
+
+Government of Canada, Statistics Canada. “The Daily — Canadian Income Survey, 2018.” Statcan.Gc.Ca, 2018, www150.statcan.gc.ca/n1/daily-quotidien/200224/dq200224a-eng.htm. Accessed 14 Dec. 2020.
+
+
+Government of Canada, Statistics Canada. “Average Usual and Actual Hours Worked in a Reference Week by Type of Work (Full- and Part-Time), Annual.” Statcan.Gc.Ca, Government of Canada, Statistics Canada, 10 Jan. 2020, www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1410004301. Accessed 20 Dec. 2020.
+
+
+Statistics Canada. “This Infographic Presents Some Highlights from the 2017 Canadian Income Survey Data.” Statcan.Gc.Ca, Government of Canada, Statistics Canada, 26 Feb. 2019, www150.statcan.gc.ca/n1/pub/11-627-m/11-627-m2019013-eng.htm. Accessed 20 Dec. 2020.
+
+
+Cristina, et al. “Epidemic of Poor Mental Health among Low-Paid Workers.” The Conversation, 31 Aug. 2018, theconversation.com/epidemic-of-poor-mental-health-among-low-paid-workers-96754#:~:text=Low%2Dpaid%20workers%20were%20significantly,their%20mental%20and%20physical%20health. Accessed 21 Dec. 2020.
